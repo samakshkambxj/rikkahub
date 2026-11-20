@@ -16,6 +16,8 @@ import me.rerere.rikkahub.ui.pages.extensions.workspace.WorkspaceVM
 import me.rerere.rikkahub.ui.pages.favorite.FavoriteVM
 import me.rerere.rikkahub.ui.pages.history.HistoryVM
 import me.rerere.rikkahub.ui.pages.imggen.ImgGenVM
+import me.rerere.rikkahub.ui.pages.ide.GitHubVM
+import me.rerere.rikkahub.ui.pages.ide.WorkspaceGitVM
 import me.rerere.rikkahub.ui.pages.mediacreation.MediaCreationSessionsVM
 import me.rerere.rikkahub.ui.pages.mediacreation.MediaCreationVM
 import me.rerere.rikkahub.ui.pages.memory.MemoryFileVM
@@ -92,7 +94,14 @@ val viewModelModule = module {
     viewModelOf(::QuickMessagesVM)
     viewModelOf(::SkillsVM)
     viewModelOf(::SkillDetailVM)
+    viewModelOf(::GitHubVM)
     viewModelOf(::WorkspaceVM)
+    viewModel<WorkspaceGitVM> {
+        WorkspaceGitVM(
+            workspaceId = it.get(),
+            repository = get(),
+        )
+    }
     viewModel<WorkspaceDetailVM> {
         WorkspaceDetailVM(
             id = it.get(),

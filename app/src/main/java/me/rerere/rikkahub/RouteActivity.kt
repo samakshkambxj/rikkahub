@@ -107,6 +107,8 @@ import me.rerere.workspace.WorkspaceStorageArea
 import me.rerere.rikkahub.ui.pages.favorite.FavoritePage
 import me.rerere.rikkahub.ui.pages.history.HistoryPage
 import me.rerere.rikkahub.ui.pages.imggen.ImageGenPage
+import me.rerere.rikkahub.ui.pages.ide.GitHubPage
+import me.rerere.rikkahub.ui.pages.ide.WorkspaceGitPage
 import me.rerere.rikkahub.ui.pages.log.LogPage
 import me.rerere.rikkahub.ui.pages.mediacreation.MediaCreationPage
 import me.rerere.rikkahub.ui.pages.mediacreation.MediaCreationSessionsPage
@@ -566,12 +568,20 @@ class RouteActivity : ComponentActivity() {
                                 SkillsPage()
                             }
 
+                            entry<Screen.GitHub> {
+                                GitHubPage()
+                            }
+
                             entry<Screen.Workspaces> {
                                 WorkspacePage()
                             }
 
                             entry<Screen.WorkspaceDetail> { key ->
                                 WorkspaceDetailPage(key.id)
+                            }
+
+                            entry<Screen.WorkspaceGit> { key ->
+                                WorkspaceGitPage(key.id)
                             }
 
                             entry<Screen.WorkspaceTerminal> { key ->
@@ -810,10 +820,16 @@ sealed interface Screen : NavKey {
     data object Skills : Screen
 
     @Serializable
+    data object GitHub : Screen
+
+    @Serializable
     data object Workspaces : Screen
 
     @Serializable
     data class WorkspaceDetail(val id: String) : Screen
+
+    @Serializable
+    data class WorkspaceGit(val id: String) : Screen
 
     @Serializable
     data class WorkspaceTerminal(val id: String) : Screen

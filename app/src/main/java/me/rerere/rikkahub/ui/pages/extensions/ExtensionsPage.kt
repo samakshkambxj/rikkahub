@@ -20,6 +20,7 @@ import me.rerere.hugeicons.stroke.Book03
 import me.rerere.hugeicons.stroke.File02
 import me.rerere.hugeicons.stroke.Folder01
 import me.rerere.hugeicons.stroke.Puzzle
+import me.rerere.hugeicons.stroke.Route01
 import me.rerere.hugeicons.stroke.Zap
 import me.rerere.rikkahub.Screen
 import me.rerere.rikkahub.ui.components.nav.BackButton
@@ -74,6 +75,12 @@ fun ExtensionsPage() {
                         leadingContent = { CardGroupIcon(HugeIcons.Puzzle, containerColor = containerColor, contentColor = contentColor) },
                         headlineContent = { Text(stringResource(R.string.extensions_page_agent_skills)) },
                         supportingContent = { Text(stringResource(R.string.extensions_page_agent_skills_desc)) },
+                    )
+                    item(
+                        onClick = { navController.navigate(Screen.GitHub) },
+                        leadingContent = { CardGroupIcon(HugeIcons.Route01, containerColor = containerColor, contentColor = contentColor) },
+                        headlineContent = { Text("GitHub & AI IDE") },
+                        supportingContent = { Text("Clone repositories, edit code, review diffs, commit and push") },
                     )
                     item(
                         onClick = { navController.navigate(Screen.Workspaces) },
