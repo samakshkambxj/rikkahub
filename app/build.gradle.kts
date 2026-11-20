@@ -266,6 +266,9 @@ dependencies {
     // java-diff-utils (unified diff)
     implementation(libs.diffutils)
 
+    // Native IDE source control (HTTPS credentials are supplied per operation, never stored in remotes)
+    implementation(libs.jgit)
+
     // coil
     implementation(libs.coil.compose)
     implementation(libs.coil.gif)
@@ -354,6 +357,7 @@ dependencies {
     // tests
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.okhttp.mockwebserver)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
