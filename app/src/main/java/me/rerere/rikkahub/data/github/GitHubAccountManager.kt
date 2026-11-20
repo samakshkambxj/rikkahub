@@ -114,6 +114,32 @@ class GitHubAccountManager(
         }
     }
 
+    /** Refresh non-secret identity metadata without replacing the current session on failure. */
+    suspend fun refreshAccountMetadata() {
+        val expected = currentAccount()
+        if (!expected.isSignedIn) return
+        val token = accessToken() ?: return
+        val user = apiClient.currentUser(token)
+        val email = runCatching { apiClient.primaryEmail(token) }.getOrNull() ?: user.email ?: expected.email
+        settingsStore.update { settings ->
+            val current = settings.gitHubAccount
+            if (current.userId == expected.userId &&
+                current.encryptedAccessToken == expected.encryptedAccessToken
+            ) {
+                settings.copy(
+                    gitHubAccount = current.copy(
+                        login = user.login,
+                        displayName = user.name,
+                        avatarUrl = user.avatarUrl,
+                        email = email,
+                    )
+                )
+            } else {
+                settings
+            }
+        }
+    }
+
     suspend fun accessToken(): String? {
         val encrypted = currentAccount().encryptedAccessToken ?: return null
         return runCatching { SecretCipher.decrypt(encrypted) }.getOrElse {
@@ -125,6 +151,7 @@ class GitHubAccountManager(
     }
 
     private suspend fun persistLogin(user: GitHubUser, accessToken: String) {
+        val email = runCatching { apiClient.primaryEmail(accessToken) }.getOrNull() ?: user.email
         val encryptedToken = withContext(Dispatchers.IO) { SecretCipher.encrypt(accessToken) }
         settingsStore.update { settings ->
             settings.copy(
@@ -133,6 +160,7 @@ class GitHubAccountManager(
                     login = user.login,
                     displayName = user.name,
                     avatarUrl = user.avatarUrl,
+                    email = email,
                     encryptedAccessToken = encryptedToken,
                 )
             )
@@ -143,7 +171,7 @@ class GitHubAccountManager(
         const val TAG = "GitHubAccountManager"
         const val DEVICE_AUTHORIZATION_ENDPOINT = "https://github.com/login/device/code"
         const val ACCESS_TOKEN_ENDPOINT = "https://github.com/login/oauth/access_token"
-        // repo covers private/public repository Git operations; read:user identifies the account.
-        const val DEVICE_FLOW_SCOPE = "repo read:user"
+        // repo covers Git operations; read:user identifies the account; user:email improves identity detection.
+        const val DEVICE_FLOW_SCOPE = "repo read:user user:email"
     }
 }

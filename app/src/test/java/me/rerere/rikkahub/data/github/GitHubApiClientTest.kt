@@ -55,6 +55,24 @@ class GitHubApiClientTest {
     }
 
     @Test
+    fun primaryEmailPrefersPrimaryVerifiedAddress() = runTest {
+        server.enqueue(
+            MockResponse().setBody(
+                """
+                [
+                  {"email":"secondary@example.test","primary":false,"verified":true},
+                  {"email":"primary-unverified@example.test","primary":true,"verified":false},
+                  {"email":"primary@example.test","primary":true,"verified":true}
+                ]
+                """.trimIndent()
+            )
+        )
+
+        assertEquals("primary@example.test", client.primaryEmail("secret-token"))
+        assertEquals("/user/emails", server.takeRequest().path)
+    }
+
+    @Test
     fun repositoryListParsesRepositoriesAndNextPage() = runTest {
         server.enqueue(
             MockResponse()

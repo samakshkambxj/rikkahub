@@ -153,6 +153,7 @@ private val SAMPLE = Settings(
     gitHubAccount = GitHubAccount(
         userId = 42,
         login = "octocat",
+        email = "octocat@example.test",
         encryptedAccessToken = "v1:keystore-ciphertext",
         oauthClientId = "oauth-client-id",
     ),

@@ -40,6 +40,24 @@ class JGitService {
         git.repository.config.getString("remote", "origin", "url")
     }
 
+    fun configuredIdentity(directory: File): GitCommitIdentity? = withGit(directory) { git ->
+        val config = git.repository.config
+        val name = config.getString("user", null, "name")?.trim().orEmpty()
+        val email = config.getString("user", null, "email")?.trim().orEmpty()
+        if (name.isNotEmpty() && email.isNotEmpty()) GitCommitIdentity(name, email) else null
+    }
+
+    fun configureIdentity(directory: File, identity: GitCommitIdentity) {
+        require(identity.name.isNotBlank()) { "Author name is required" }
+        require(identity.email.isNotBlank()) { "Author email is required" }
+        withGit(directory) { git ->
+            val config = git.repository.config
+            config.setString("user", null, "name", identity.name.trim())
+            config.setString("user", null, "email", identity.email.trim())
+            config.save()
+        }
+    }
+
     fun status(directory: File): WorkspaceGitStatus = withGit(directory) { git ->
         val repository = git.repository
         val branch = repository.branch ?: Constants.HEAD

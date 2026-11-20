@@ -68,7 +68,7 @@ fun GitHubPage(vm: GitHubVM = koinViewModel()) {
 
     LaunchedEffect(openWorkspace) {
         openWorkspace?.let { workspaceId ->
-            navController.navigate(Screen.WorkspaceDetail(workspaceId))
+            navController.navigate(Screen.WorkspaceAgentSetup(workspaceId))
             vm.consumeOpenWorkspace()
         }
     }

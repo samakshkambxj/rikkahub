@@ -17,7 +17,10 @@ The `feat/ai-ide-github` branch implements:
 - HTTPS cloning into a new local RikkaHub workspace using JGit. No rootfs `git` package is required.
 - Branch, ahead/behind, changed-file, staged-diff, and unstaged-diff views.
 - Commit-all with an explicit author/committer identity, plus pull and push.
-- GitHub noreply email as the signed-in account's default commit identity.
+- Agent setup prompt after cloning and from the workspace toolbar: rootfs checks, Git installation
+  through `apt-get`/`apk`, and repository-local identity configuration.
+- Identity auto-detection from repository config, workspace global config, or GitHub metadata. A
+  primary/public GitHub email is preferred when available; the ID-based noreply address is the fallback.
 - JVM tests for the REST client and real temporary JGit repositories.
 
 Current boundaries:
@@ -39,7 +42,9 @@ Current boundaries:
 4. Enter the OAuth App's public client ID and start device sign-in.
 5. Confirm the displayed code at GitHub's verification page.
 
-The requested scope is `repo read:user`. Do not put a client secret in the Android app.
+The requested scope is `repo read:user user:email`. The email scope is optional in practice: if the
+token cannot read `/user/emails`, setup falls back to the public profile email or GitHub noreply
+address. Do not put a client secret in the Android app.
 
 ### Personal access token
 

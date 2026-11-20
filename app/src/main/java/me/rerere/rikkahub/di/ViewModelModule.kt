@@ -17,6 +17,7 @@ import me.rerere.rikkahub.ui.pages.favorite.FavoriteVM
 import me.rerere.rikkahub.ui.pages.history.HistoryVM
 import me.rerere.rikkahub.ui.pages.imggen.ImgGenVM
 import me.rerere.rikkahub.ui.pages.ide.GitHubVM
+import me.rerere.rikkahub.ui.pages.ide.WorkspaceAgentSetupVM
 import me.rerere.rikkahub.ui.pages.ide.WorkspaceGitVM
 import me.rerere.rikkahub.ui.pages.mediacreation.MediaCreationSessionsVM
 import me.rerere.rikkahub.ui.pages.mediacreation.MediaCreationVM
@@ -96,6 +97,14 @@ val viewModelModule = module {
     viewModelOf(::SkillDetailVM)
     viewModelOf(::GitHubVM)
     viewModelOf(::WorkspaceVM)
+    viewModel<WorkspaceAgentSetupVM> {
+        WorkspaceAgentSetupVM(
+            workspaceId = it.get(),
+            workspaceRepository = get(),
+            gitRepository = get(),
+            accountManager = get(),
+        )
+    }
     viewModel<WorkspaceGitVM> {
         WorkspaceGitVM(
             workspaceId = it.get(),

@@ -221,6 +221,9 @@ fun WorkspaceDetailPage(id: String) {
                         Icon(HugeIcons.Refresh01, contentDescription = null)
                     }
                     if (state.workspace?.capabilities()?.localFiles == true) {
+                        IconButton(onClick = { navController.navigate(Screen.WorkspaceAgentSetup(id)) }) {
+                            Icon(HugeIcons.Wrench01, contentDescription = "Agent setup")
+                        }
                         IconButton(onClick = { navController.navigate(Screen.WorkspaceGit(id)) }) {
                             Icon(HugeIcons.Route01, contentDescription = "Source control")
                         }

@@ -3,6 +3,7 @@ package me.rerere.rikkahub.data.git
 import org.eclipse.jgit.api.Git
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Assert.assertThrows
 import org.junit.Rule
@@ -76,6 +77,22 @@ class JGitServiceTest {
 
         assertTrue(service.status(directory).isClean)
         assertEquals(2, Git.open(directory).use { git -> git.log().call().count() })
+    }
+
+    @Test
+    fun identityCanBeDetectedAndSavedLocally() {
+        val directory = repository()
+        assertNull(service.configuredIdentity(directory))
+
+        val updated = GitCommitIdentity("Samaksh Kamboj", "samaksh@example.test")
+        service.configureIdentity(directory, updated)
+
+        assertEquals(updated, service.configuredIdentity(directory))
+        Git.open(directory).use { git ->
+            val config = git.repository.config
+            assertEquals(updated.name, config.getString("user", null, "name"))
+            assertEquals(updated.email, config.getString("user", null, "email"))
+        }
     }
 
     @Test

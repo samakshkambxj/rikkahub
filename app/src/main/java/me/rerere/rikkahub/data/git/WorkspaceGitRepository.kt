@@ -6,6 +6,7 @@ import me.rerere.rikkahub.data.db.entity.WorkspaceEntity
 import me.rerere.rikkahub.data.github.GitHubAccountManager
 import me.rerere.rikkahub.data.github.GitHubRepository
 import me.rerere.rikkahub.data.repository.WorkspaceRepository
+import me.rerere.workspace.WorkspaceShellStatus
 import org.eclipse.jgit.transport.CredentialsProvider
 import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider
 import java.io.File
@@ -22,6 +23,99 @@ class WorkspaceGitRepository(
 
     suspend fun remoteUrl(workspaceId: String): String? = withContext(Dispatchers.IO) {
         git.remoteUrl(directory(workspaceId))
+    }
+
+    suspend fun configuredIdentity(workspaceId: String): GitCommitIdentity? =
+        withContext(Dispatchers.IO) {
+            git.configuredIdentity(directory(workspaceId))
+        }
+
+    suspend fun configureIdentity(workspaceId: String, identity: GitCommitIdentity) =
+        withContext(Dispatchers.IO) {
+            git.configureIdentity(directory(workspaceId), identity)
+        }
+
+    /** Local repository config wins, then the rootfs global config, then GitHub metadata. */
+    suspend fun detectIdentity(workspaceId: String): GitCommitIdentity = withContext(Dispatchers.IO) {
+        val local = git.configuredIdentity(directory(workspaceId))
+        val global = globalGitIdentity(workspaceId)
+        val account = accountManager.currentAccount()
+        GitCommitIdentity(
+            name = local?.name
+                ?: global?.name?.takeIf { it.isNotBlank() }
+                ?: account.committerName,
+            email = local?.email
+                ?: global?.email?.takeIf { it.isNotBlank() }
+                ?: account.committerEmail,
+        )
+    }
+
+    suspend fun gitVersion(workspaceId: String): String? {
+        val workspace = workspaceRepository.getById(workspaceId) ?: error("Workspace not found")
+        if (workspace.shellStatus != WorkspaceShellStatus.READY.name) return null
+        val result = workspaceRepository.executeCommand(
+            id = workspaceId,
+            command = "if command -v git >/dev/null 2>&1; then git --version; fi",
+        )
+        return result.stdout.lineSequence()
+            .map { it.trim() }
+            .firstOrNull { it.startsWith("git version") }
+    }
+
+    /** Install only git inside the sandbox; no host Android packages are changed. */
+    suspend fun ensureGitInstalled(workspaceId: String): String {
+        val workspace = workspaceRepository.getById(workspaceId) ?: error("Workspace not found")
+        require(workspace.capabilities().rootfs) { "Agent Git setup requires a local rootfs workspace" }
+        require(workspace.shellStatus == WorkspaceShellStatus.READY.name) {
+            "Install the workspace Rootfs before installing Git"
+        }
+        gitVersion(workspaceId)?.let { return it }
+        val result = workspaceRepository.executeCommand(
+            id = workspaceId,
+            command = """
+                set -e
+                if command -v apt-get >/dev/null 2>&1; then
+                  export DEBIAN_FRONTEND=noninteractive
+                  apt-get update
+                  apt-get install -y --no-install-recommends git ca-certificates
+                elif command -v apk >/dev/null 2>&1; then
+                  apk add --no-cache git ca-certificates
+                else
+                  printf '%s\n' 'No supported package manager found. Install git manually with apt-get or apk.' >&2
+                  exit 1
+                fi
+                git --version
+            """.trimIndent(),
+            timeoutMillis = GIT_INSTALL_TIMEOUT_MS,
+        )
+        check(!result.timedOut) { "Git installation timed out. Check the network and try again." }
+        check(result.exitCode == 0) {
+            val details = result.stderr.ifBlank { result.stdout }.trim().takeLast(MAX_ERROR_OUTPUT)
+            "Could not install Git${details.takeIf { it.isNotEmpty() }?.let { ": $it" }.orEmpty()}"
+        }
+        return gitVersion(workspaceId) ?: "Git installed"
+    }
+
+    private suspend fun globalGitIdentity(workspaceId: String): GitCommitIdentity? {
+        val workspace = workspaceRepository.getById(workspaceId) ?: return null
+        if (workspace.shellStatus != WorkspaceShellStatus.READY.name) return null
+        val result = workspaceRepository.executeCommand(
+            id = workspaceId,
+            command = """
+                if ! command -v git >/dev/null 2>&1; then exit 0; fi
+                printf 'name='
+                git config --global --get user.name 2>/dev/null || printf '\n'
+                printf 'email='
+                git config --global --get user.email 2>/dev/null || printf '\n'
+            """.trimIndent(),
+        )
+        if (result.exitCode != 0) return null
+        val values = result.stdout.lineSequence()
+            .filter { it.startsWith("name=") || it.startsWith("email=") }
+            .associate { line -> line.substringBefore('=') to line.substringAfter('=').trim() }
+        val name = values["name"].orEmpty()
+        val email = values["email"].orEmpty()
+        return if (name.isNotEmpty() || email.isNotEmpty()) GitCommitIdentity(name, email) else null
     }
 
     suspend fun status(workspaceId: String): WorkspaceGitStatus = withContext(Dispatchers.IO) {
@@ -51,15 +145,6 @@ class WorkspaceGitRepository(
             runCatching { workspaceRepository.delete(workspace.id) }
             throw error
         }
-    }
-
-    suspend fun defaultIdentity(): GitCommitIdentity {
-        val account = accountManager.currentAccount()
-        require(account.isSignedIn) { "Sign in to GitHub before committing" }
-        return GitCommitIdentity(
-            name = account.committerName,
-            email = account.committerEmail,
-        )
     }
 
     suspend fun commitAll(
@@ -92,6 +177,8 @@ class WorkspaceGitRepository(
     }
 
     private companion object {
+        const val GIT_INSTALL_TIMEOUT_MS = 10 * 60 * 1_000L
+        const val MAX_ERROR_OUTPUT = 4_000
         const val GITHUB_HTTPS_PREFIX = "https://github.com/"
         // GitHub accepts any non-blank username for token auth; this value is not an account name.
         const val GITHUB_TOKEN_USERNAME = "x-access-token"

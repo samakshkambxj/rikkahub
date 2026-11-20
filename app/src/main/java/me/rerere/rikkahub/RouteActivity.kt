@@ -108,6 +108,7 @@ import me.rerere.rikkahub.ui.pages.favorite.FavoritePage
 import me.rerere.rikkahub.ui.pages.history.HistoryPage
 import me.rerere.rikkahub.ui.pages.imggen.ImageGenPage
 import me.rerere.rikkahub.ui.pages.ide.GitHubPage
+import me.rerere.rikkahub.ui.pages.ide.WorkspaceAgentSetupPage
 import me.rerere.rikkahub.ui.pages.ide.WorkspaceGitPage
 import me.rerere.rikkahub.ui.pages.log.LogPage
 import me.rerere.rikkahub.ui.pages.mediacreation.MediaCreationPage
@@ -584,6 +585,10 @@ class RouteActivity : ComponentActivity() {
                                 WorkspaceGitPage(key.id)
                             }
 
+                            entry<Screen.WorkspaceAgentSetup> { key ->
+                                WorkspaceAgentSetupPage(key.id)
+                            }
+
                             entry<Screen.WorkspaceTerminal> { key ->
                                 WorkspaceTerminalPage(key.id)
                             }
@@ -830,6 +835,9 @@ sealed interface Screen : NavKey {
 
     @Serializable
     data class WorkspaceGit(val id: String) : Screen
+
+    @Serializable
+    data class WorkspaceAgentSetup(val id: String) : Screen
 
     @Serializable
     data class WorkspaceTerminal(val id: String) : Screen

@@ -13,6 +13,13 @@ data class GitHubUser(
 )
 
 @Serializable
+data class GitHubEmail(
+    val email: String,
+    val primary: Boolean = false,
+    val verified: Boolean = false,
+)
+
+@Serializable
 data class GitHubRepositoryOwner(
     val login: String,
 )
@@ -50,6 +57,7 @@ data class GitHubAccount(
     val login: String = "",
     val displayName: String? = null,
     val avatarUrl: String? = null,
+    val email: String? = null,
     val encryptedAccessToken: String? = null,
     val oauthClientId: String = "",
 ) {
@@ -59,9 +67,10 @@ data class GitHubAccount(
     val committerName: String
         get() = displayName?.trim().takeUnless { it.isNullOrEmpty() } ?: login
 
-    /** GitHub's ID-based noreply address keeps the user's private email out of commit metadata. */
+    /** Prefer the account email when available; otherwise use GitHub's ID-based noreply address. */
     val committerEmail: String
-        get() = userId?.let { "$it+$login@users.noreply.github.com" }.orEmpty()
+        get() = email?.trim()?.takeIf { it.isNotEmpty() }
+            ?: userId?.let { "$it+$login@users.noreply.github.com" }.orEmpty()
 }
 
 sealed interface GitHubLoginStatus {

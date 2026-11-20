@@ -23,6 +23,15 @@ class GitHubApiClient(
         return json.decodeFromString(GitHubUser.serializer(), response.body)
     }
 
+    suspend fun primaryEmail(accessToken: String): String? {
+        val url = baseUrl.newBuilder().addPathSegments("user/emails").build()
+        val response = get(url, accessToken)
+        val emails = json.decodeFromString(EMAIL_LIST_SERIALIZER, response.body)
+        return emails.firstOrNull { it.primary && it.verified }?.email
+            ?: emails.firstOrNull { it.primary }?.email
+            ?: emails.firstOrNull { it.verified }?.email
+    }
+
     suspend fun listRepositories(
         accessToken: String,
         page: Int = 1,
@@ -93,6 +102,9 @@ class GitHubApiClient(
         val NEXT_URL_REGEX = Regex("<([^>]+)>")
         val REPOSITORY_LIST_SERIALIZER = kotlinx.serialization.builtins.ListSerializer(
             GitHubRepository.serializer()
+        )
+        val EMAIL_LIST_SERIALIZER = kotlinx.serialization.builtins.ListSerializer(
+            GitHubEmail.serializer()
         )
     }
 }

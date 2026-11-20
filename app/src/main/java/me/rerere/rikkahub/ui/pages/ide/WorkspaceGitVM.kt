@@ -23,7 +23,7 @@ class WorkspaceGitVM(
 
     init {
         viewModelScope.launch {
-            runCatching { repository.defaultIdentity() }.onSuccess { identity ->
+            runCatching { repository.detectIdentity(workspaceId) }.onSuccess { identity ->
                 _state.update {
                     it.copy(authorName = identity.name, authorEmail = identity.email)
                 }
