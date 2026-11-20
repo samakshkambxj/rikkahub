@@ -75,9 +75,17 @@ per operation. They are never appended to the clone URL.
 The repository needs its normal Android build prerequisites, including an Android SDK/JDK and the
 project's `app/google-services.json` configuration.
 
-`.github/workflows/android-apk.yml` builds `assembleGithubRelease` for every branch and tag push,
-uploads the APKs as Actions artifacts, and publishes a GitHub Release whenever a tag is pushed. It
-uses the existing `KEY_BASE64`, `SIGNING_CONFIG`, and `GOOGLE_SERVICES_JSON` repository secrets.
+`.github/workflows/android-apk.yml` builds `assembleGithubDebug` for branch pushes and manual runs,
+so test APK artifacts do not require repository secrets. Those builds use the clearly marked
+`.github/ci/google-services.json` placeholder when no Firebase configuration is available; it is not
+suitable for production analytics or Crashlytics.
+
+Tag pushes build `assembleGithubRelease` and publish a GitHub Release. Signed tag releases require
+`KEY_BASE64`, `SIGNING_CONFIG`, and `GOOGLE_SERVICES_JSON` repository secrets. The workflow fails
+before compilation with setup instructions when any are absent rather than publishing an unsigned or
+incorrectly configured test APK as a release. `SIGNING_CONFIG` uses the existing `local.properties`
+keys (`storeFile`, `storePassword`, `keyAlias`, and `keyPassword`). Set secrets through GitHub's
+repository settings or `gh secret set`; never commit their values.
 
 ## Remaining roadmap
 

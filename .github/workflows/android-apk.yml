@@ -55,34 +55,56 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
 
-      - name: Prepare signing and Google Services configuration
+      - name: Configure build type and credentials
         env:
+          IS_TAG: ${{ startsWith(github.ref, 'refs/tags/') }}
           KEY_BASE64: ${{ secrets.KEY_BASE64 }}
           SIGNING_CONFIG: ${{ secrets.SIGNING_CONFIG }}
           GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
         run: |
-          for variable in KEY_BASE64 SIGNING_CONFIG GOOGLE_SERVICES_JSON; do
-            if [ -z "${!variable}" ]; then
-              echo "Missing required repository secret: $variable"
-              exit 1
+          if [ "$IS_TAG" = "true" ]; then
+            for variable in KEY_BASE64 SIGNING_CONFIG GOOGLE_SERVICES_JSON; do
+              if [ -z "${!variable}" ]; then
+                echo "::error::Signed tag releases require the $variable repository secret."
+                echo "::error::See docs/AI_IDE.md for CI setup. No unsigned test APK will be published as a release."
+                exit 1
+              fi
+            done
+            printf '%s' "$KEY_BASE64" | base64 -d > app/app.key
+            printf '%s\n' "$SIGNING_CONFIG" > local.properties
+            printf '%s\n' "$GOOGLE_SERVICES_JSON" > app/google-services.json
+            echo 'BUILD_TASK=assembleGithubRelease' >> "$GITHUB_ENV"
+            echo 'APK_DIRECTORY=app/build/outputs/apk/github/release' >> "$GITHUB_ENV"
+          else
+            echo 'BUILD_TASK=assembleGithubDebug' >> "$GITHUB_ENV"
+            echo 'APK_DIRECTORY=app/build/outputs/apk/github/debug' >> "$GITHUB_ENV"
+            if [ -n "$GOOGLE_SERVICES_JSON" ]; then
+              printf '%s\n' "$GOOGLE_SERVICES_JSON" > app/google-services.json
+            else
+              cp .github/ci/google-services.json app/google-services.json
+              echo '::notice::Using placeholder Firebase configuration for this debug-only CI build.'
             fi
-          done
-          printf '%s' "$KEY_BASE64" | base64 -d > app/app.key
-          printf '%s\n' "$SIGNING_CONFIG" > local.properties
-          printf '%s\n' "$GOOGLE_SERVICES_JSON" > app/google-services.json
+          fi
 
-      - name: Build release APK
+      - name: Build APK
         run: |
           chmod +x gradlew
-          ./gradlew assembleGithubRelease
+          ./gradlew "$BUILD_TASK"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: rikkahub-apk-${{ github.sha }}
-          path: |
-            app/build/outputs/apk/github/release/*.apk
-            app/build/outputs/mapping/githubRelease/mapping.txt
+          path: ${{ env.APK_DIRECTORY }}/*.apk
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload release mapping
+        if: success() && startsWith(github.ref, 'refs/tags/')
+        uses: actions/upload-artifact@v4
+        with:
+          name: rikkahub-mapping-${{ github.ref_name }}
+          path: app/build/outputs/mapping/githubRelease/mapping.txt
           if-no-files-found: error
           retention-days: 14
 
