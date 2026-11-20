@@ -1,0 +1,99 @@
+name: Android APK
+
+on:
+  push:
+    branches:
+      - '**'
+    tags:
+      - '**'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-apk:
+    name: Build GitHub APK
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: jetbrains
+          java-version: '21'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: web-ui/pnpm-lock.yaml
+
+      - name: Install web UI dependencies
+        working-directory: web-ui
+        run: pnpm install --frozen-lockfile
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Prepare signing and Google Services configuration
+        env:
+          KEY_BASE64: ${{ secrets.KEY_BASE64 }}
+          SIGNING_CONFIG: ${{ secrets.SIGNING_CONFIG }}
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: |
+          for variable in KEY_BASE64 SIGNING_CONFIG GOOGLE_SERVICES_JSON; do
+            if [ -z "${!variable}" ]; then
+              echo "Missing required repository secret: $variable"
+              exit 1
+            fi
+          done
+          printf '%s' "$KEY_BASE64" | base64 -d > app/app.key
+          printf '%s\n' "$SIGNING_CONFIG" > local.properties
+          printf '%s\n' "$GOOGLE_SERVICES_JSON" > app/google-services.json
+
+      - name: Build release APK
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleGithubRelease
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rikkahub-apk-${{ github.sha }}
+          path: |
+            app/build/outputs/apk/github/release/*.apk
+            app/build/outputs/mapping/githubRelease/mapping.txt
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Publish tagged release
+        if: success() && startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: RikkaHub AI IDE ${{ github.ref_name }}
+          generate_release_notes: true
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          files: |
+            app/build/outputs/apk/github/release/*.apk
+            app/build/outputs/mapping/githubRelease/mapping.txt
