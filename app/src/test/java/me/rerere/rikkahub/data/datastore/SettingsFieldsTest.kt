@@ -9,6 +9,7 @@ import me.rerere.ai.provider.ProviderSetting
 import me.rerere.asr.ASRProviderSetting
 import me.rerere.mediagen.provider.MediaGenerationProviderSetting
 import me.rerere.rikkahub.data.ai.mcp.McpServerConfig
+import me.rerere.rikkahub.data.github.GitHubAccount
 import me.rerere.rikkahub.data.model.Assistant
 import me.rerere.rikkahub.data.model.Lorebook
 import me.rerere.rikkahub.data.model.PromptInjection
@@ -149,6 +150,12 @@ private val SAMPLE = Settings(
     searchCommonOptions = SearchCommonOptions(resultSize = 3),
     searchServiceSelected = 1,
     mcpServers = listOf(McpServerConfig.SseTransportServer(id = id(8), url = "https://example.com/sse")),
+    gitHubAccount = GitHubAccount(
+        userId = 42,
+        login = "octocat",
+        encryptedAccessToken = "v1:keystore-ciphertext",
+        oauthClientId = "oauth-client-id",
+    ),
     webDavConfig = WebDavConfig(url = "https://dav.example.com"),
     s3Config = S3Config(bucket = "backup"),
     uploadS3Config = S3Config(bucket = "upload"),
@@ -204,6 +211,7 @@ private val STORED_KEYS = setOf(
     "search_common",
     "search_selected",
     "mcp_servers",
+    "github_account",
     "webdav_config",
     "s3_config",
     "upload_s3_config",

@@ -2,6 +2,7 @@ package me.rerere.rikkahub.di
 
 import android.content.Context
 import me.rerere.rikkahub.data.files.FileFolders
+import me.rerere.rikkahub.data.git.WorkspaceGitRepository
 import me.rerere.rikkahub.data.files.FilesManager
 import me.rerere.rikkahub.data.repository.ConversationRepository
 import me.rerere.rikkahub.data.repository.FavoriteRepository
@@ -96,6 +97,13 @@ val repositoryModule = module {
 
     single {
         WorkspaceRepository(get(), get(), get(), get(), get())
+    }
+
+    single {
+        WorkspaceGitRepository(
+            workspaceRepository = get(),
+            accountManager = get(),
+        )
     }
 
     single {

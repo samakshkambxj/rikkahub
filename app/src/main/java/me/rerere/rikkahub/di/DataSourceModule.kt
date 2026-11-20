@@ -29,6 +29,8 @@ import me.rerere.rikkahub.data.datastore.SettingsStore
 import me.rerere.rikkahub.data.db.AppDatabase
 import me.rerere.rikkahub.data.db.AppDatabaseFactory
 import me.rerere.rikkahub.data.db.fts.MessageFtsManager
+import me.rerere.rikkahub.data.github.GitHubAccountManager
+import me.rerere.rikkahub.data.github.GitHubApiClient
 import me.rerere.rikkahub.data.remote.ModelsDevUpdater
 import me.rerere.rikkahub.data.remote.RemoteFileStore
 import me.rerere.rikkahub.data.remote.RikkaHubAPI
@@ -139,6 +141,17 @@ val dataSourceModule = module {
 
     single { McpManager(settingsStore = get(), appScope = get(), filesManager = get()) }
 
+    single { GitHubApiClient(client = get(), json = get()) }
+
+    single {
+        GitHubAccountManager(
+            settingsStore = get(),
+            appScope = get(),
+            client = get(),
+            apiClient = get(),
+        )
+    }
+
     single {
         MemoryConsolidator(
             providerManager = get(),
@@ -235,6 +248,7 @@ val dataSourceModule = module {
             .addInterceptor(AIRequestInterceptor())
             .addInterceptor(HttpLoggingInterceptor().apply {
                 redactHeader("Proxy-Authorization")
+                redactHeader("Authorization")
                 level = HttpLoggingInterceptor.Level.HEADERS
             })
             .build()

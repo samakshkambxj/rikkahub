@@ -300,6 +300,15 @@ class WorkspaceRepository(
         inputStream: InputStream,
     ): WorkspaceFileEntry = withBackend(id) { it.importFile(area, destinationPath, fileName, inputStream) }
 
+    /** Local workspace file root used by native project tooling such as JGit. */
+    suspend fun localFilesDirectory(id: String): File = withContext(Dispatchers.IO) {
+        val workspace = dao.getById(id) ?: error("Workspace not found: $id")
+        require(workspace.capabilities().localFiles) {
+            "Native Git operations require a local workspace"
+        }
+        manager.filesDir(workspace.root).apply { mkdirs() }
+    }
+
     /** 宿主机上可直接访问的文件; 没有本地落点的工作区返回 null */
     suspend fun resolveFile(
         id: String,

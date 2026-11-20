@@ -147,6 +147,9 @@ class SettingsStore internal constructor(
         // MCP
         val MCP_SERVERS = stringPreferencesKey("mcp_servers")
 
+        // Native GitHub / IDE integration (access token is Keystore-encrypted)
+        val GITHUB_ACCOUNT = stringPreferencesKey("github_account")
+
         // WebDAV
         val WEBDAV_CONFIG = stringPreferencesKey("webdav_config")
 
