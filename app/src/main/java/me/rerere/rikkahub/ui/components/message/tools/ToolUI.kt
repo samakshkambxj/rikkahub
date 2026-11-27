@@ -107,6 +107,7 @@ object ToolUIRegistry {
         ConversationSearchToolUI,
         EditFileToolUI,
         ReadFileToolUI,
+        SearchFilesToolUI,
         WriteFileToolUI,
         ShellToolUI,
         PhoneUseToolUI,

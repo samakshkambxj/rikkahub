@@ -28,6 +28,7 @@ import me.rerere.workspace.WorkspaceCommandResult
 import me.rerere.workspace.WorkspaceFileEntry
 import me.rerere.workspace.WorkspaceLayout
 import me.rerere.workspace.WorkspaceManager
+import me.rerere.workspace.WorkspaceSearchMatch
 import me.rerere.workspace.WorkspaceShellStatus
 import me.rerere.workspace.WorkspaceStorageArea
 import me.rerere.workspace.WorkspaceType
@@ -395,6 +396,46 @@ class WorkspaceRepository(
         taskId: String,
     ): WorkspaceBackgroundCommand = withBackend(id) { it.startBackgroundCommand(command, cwd, taskId) }
 
+    /**
+     * 在存储区内递归搜索文本, 返回的匹配路径相对存储区根目录。
+     * 本地工作区遵守 .gitignore 与内置忽略目录; 远程工作区经 grep 命令搜索, 只能排除内置目录。
+     */
+    suspend fun searchFiles(
+        id: String,
+        area: WorkspaceStorageArea,
+        path: String,
+        query: String,
+        regex: Boolean = false,
+        ignoreCase: Boolean = true,
+        includeGlob: String? = null,
+        maxResults: Int = DEFAULT_SEARCH_MAX_RESULTS,
+    ): List<WorkspaceSearchMatch> = readFromBackend(id) {
+        it.searchFiles(
+            area,
+            path,
+            query,
+            regex,
+            ignoreCase,
+            includeGlob,
+            maxResults.coerceIn(1, MAX_SEARCH_RESULTS),
+        )
+    }
+
+    /** 按环境内绝对路径搜索, 供 AI 工具使用; 路径先经 [WorkspaceLayout.locateAbsolute] 映射到存储区 */
+    suspend fun searchInRootfs(
+        id: String,
+        path: String,
+        query: String,
+        regex: Boolean = false,
+        ignoreCase: Boolean = true,
+        includeGlob: String? = null,
+        maxResults: Int = DEFAULT_SEARCH_MAX_RESULTS,
+    ): List<WorkspaceSearchMatch> {
+        val layout = layout(id) ?: error("Workspace not found: $id")
+        val (area, relative) = layout.locateAbsolute(path)
+        return searchFiles(id, area, relative, query, regex, ignoreCase, includeGlob, maxResults)
+    }
+
     suspend fun delete(id: String): Boolean {
         val workspace = dao.getById(id) ?: return false
         dao.deleteById(id)
@@ -602,5 +643,7 @@ class WorkspaceRepository(
     companion object {
         private const val TAG = "WorkspaceRepository"
         private const val MAX_PREVIEW_BYTES = 512L * 1024
+        const val DEFAULT_SEARCH_MAX_RESULTS = 100
+        const val MAX_SEARCH_RESULTS = 500
     }
 }

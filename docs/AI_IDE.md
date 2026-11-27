@@ -113,6 +113,9 @@ repository settings or `gh secret set`; never commit their values.
 
 - Project-root selection and repository-aware context indexing with `.gitignore` support.
 - Planning, codebase search, patch edits, shell/test loops, and concise progress in an agent panel.
+  - Done: `workspace_search_files` agent tool — gitignore-aware recursive search over local and SSH
+    workspaces (`WorkspaceBackend.searchFiles`), with literal/regex modes, include globs and result caps.
+    Remaining: surface the same search in the workspace file browser UI.
 - Checkpoints and rollback for AI edits; diff review before applying or committing changes.
 - Per-workspace command/network/write approval policies and no autonomous push by default.
 - Reuse the existing provider abstraction, MCP, skills, memory, and workspace tools.

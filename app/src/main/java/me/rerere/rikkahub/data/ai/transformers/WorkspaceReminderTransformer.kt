@@ -212,6 +212,9 @@ private fun buildWorkspacePrompt(
     appendLine("- Available tools:")
     appendLine("  - `workspace_read_file`: read file contents.")
     appendLine(
+        "  - `workspace_search_files`: search text across workspace files, skipping .gitignore'd and build directories."
+    )
+    appendLine(
         "  - `workspace_write_file` / `workspace_edit_file`: create files, or make precise edits to existing files."
     )
     appendLine("  - `workspace_shell`: run shell commands (the files area is mounted at /workspace).")
@@ -282,6 +285,7 @@ private fun buildSshWorkspacePrompt(
     appendShellLine(shell)
     appendLine("- Available tools:")
     appendLine("  - `workspace_read_file`: read file contents.")
+    appendLine("  - `workspace_search_files`: search text across workspace files with grep.")
     appendLine("  - `workspace_shell`: run shell commands on the remote machine (defaults to the workspace directory).")
     appendLine(
         "- There are no file write or edit tools in this workspace. Create and modify files with `workspace_shell`, for example a quoted heredoc (`cat > file <<'EOF'`) for new content, or `sed`, `patch` or a short script for targeted edits. Prefer targeted edits over rewriting whole files."

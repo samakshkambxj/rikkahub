@@ -1,6 +1,7 @@
 package me.rerere.rikkahub.data.ai.tools
 
 import kotlinx.serialization.json.JsonObjectBuilder
+import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
@@ -29,6 +30,7 @@ private const val MAX_READ_FILE_BYTES = 8L * 1024 * 1024
 
 val WorkspaceToolDefaultApprovals: Map<String, Boolean> = mapOf(
     "workspace_read_file" to false,
+    "workspace_search_files" to false,
     "workspace_write_file" to false,
     "workspace_edit_file" to false,
     "workspace_shell" to true,
@@ -61,6 +63,7 @@ suspend fun createWorkspaceTools(
 
     return buildList {
         add(createReadFileTool(workspaceId, layout, ::needsApproval, workspaceRepository))
+        add(createSearchFilesTool(workspaceId, layout, ::needsApproval, workspaceRepository))
         if (workspace.capabilities().fileWriteTools) {
             add(createWriteFileTool(workspaceId, layout, ::needsApproval, workspaceRepository))
             add(createEditFileTool(workspaceId, layout, ::needsApproval, workspaceRepository))
@@ -116,6 +119,93 @@ private fun createReadFileTool(
                 )
             )
         }
+    },
+)
+
+private fun createSearchFilesTool(
+    workspaceId: String,
+    layout: WorkspaceLayout,
+    needsApproval: (String) -> Boolean,
+    workspaceRepository: WorkspaceRepository,
+) = Tool(
+    name = "workspace_search_files",
+    description = """
+        Search text across files in the assistant's bound workspace Rootfs. Paths must be absolute inside Rootfs.
+        Use ${layout.workspaceDir} for the workspace files area. Defaults to searching the whole workspace files area when path is omitted.
+        Literal text search by default; set regex=true to treat query as a regular expression.
+        On local workspaces, .gitignore rules and common directories (.git, node_modules, build, dist, out, .gradle) are skipped.
+        Returns matches with file path (relative to the searched path), line number and line text.
+    """.trimIndent().replace("\n", " "),
+    parameters = {
+        InputSchema.Obj(
+            properties = buildJsonObject {
+                put("query", buildJsonObject {
+                    put("type", "string")
+                    put("description", "Text or regular expression to search for")
+                })
+                putPathProperty(layout, required = false)
+                put("regex", buildJsonObject {
+                    put("type", "boolean")
+                    put("description", "Treat query as a regular expression. Defaults to false (literal text).")
+                })
+                put("ignore_case", buildJsonObject {
+                    put("type", "boolean")
+                    put("description", "Case-insensitive search. Defaults to true.")
+                })
+                put("include_glob", buildJsonObject {
+                    put("type", "string")
+                    put("description", "Only search files matching this glob, e.g. **/*.kt. Defaults to all text files.")
+                })
+                put("max_results", buildJsonObject {
+                    put("type", "integer")
+                    put("description", "Maximum number of matches to return. Defaults to ${WorkspaceRepository.DEFAULT_SEARCH_MAX_RESULTS}, max ${WorkspaceRepository.MAX_SEARCH_RESULTS}.")
+                })
+            },
+            required = listOf("query"),
+        )
+    },
+    needsApproval = { needsApproval("workspace_search_files") },
+    execute = {
+        val params = it.jsonObject
+        val query = params.string("query") ?: error("query is required")
+        require(query.isNotBlank()) { "query must not be blank" }
+        val path = params.string("path")?.let { params.absolutePath("path") } ?: layout.workspaceDir
+        val regex = params.string("regex")?.toBooleanStrictOrNull() ?: false
+        val ignoreCase = params.string("ignore_case")?.toBooleanStrictOrNull() ?: true
+        val includeGlob = params.string("include_glob")?.takeIf { it.isNotBlank() }
+        val maxResults = params.string("max_results")?.toIntOrNull()
+            ?.coerceIn(1, WorkspaceRepository.MAX_SEARCH_RESULTS)
+            ?: WorkspaceRepository.DEFAULT_SEARCH_MAX_RESULTS
+        val matches = workspaceRepository.searchInRootfs(
+            workspaceId,
+            path,
+            query,
+            regex = regex,
+            ignoreCase = ignoreCase,
+            includeGlob = includeGlob,
+            maxResults = maxResults,
+        )
+        listOf(
+            UIMessagePart.Text(
+                buildJsonObject {
+                    put("query", query)
+                    put("path", path)
+                    put("regex", regex)
+                    put("ignoreCase", ignoreCase)
+                    includeGlob?.let { put("includeGlob", it) }
+                    put("matchCount", matches.size)
+                    put("matches", buildJsonArray {
+                        matches.forEach { match ->
+                            add(buildJsonObject {
+                                put("path", match.path)
+                                put("line", match.line)
+                                put("text", match.text)
+                            })
+                        }
+                    })
+                }.toString()
+            )
+        )
     },
 )
 

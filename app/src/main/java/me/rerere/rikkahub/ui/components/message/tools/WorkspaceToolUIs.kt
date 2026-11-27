@@ -31,6 +31,7 @@ import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.longOrNull
 import me.rerere.ai.ui.DiffMetadata
 import me.rerere.ai.ui.metadataAs
+import me.rerere.common.http.jsonArrayOrNull
 import me.rerere.common.http.jsonObjectOrNull
 import me.rerere.rikkahub.ui.components.richtext.CodeHighlightText
 import androidx.compose.ui.res.stringResource
@@ -507,4 +508,124 @@ private fun languageOf(path: String?): String = when (
     "sql" -> "sql"
     "gradle" -> "groovy"
     else -> "plaintext"
+}
+
+/**
+ * 工作区文件搜索: 摘要显示匹配条数与前几条匹配, 详情为完整匹配列表
+ */
+object SearchFilesToolUI : ToolUIRenderer {
+    private const val SUMMARY_MAX_LINES = 8
+    private const val LINE_MAX_CHARS = 120
+
+    override val toolName: String = "workspace_search_files"
+
+    override fun icon(context: ToolUIContext): ImageVector = HugeIcons.Search01
+
+    @Composable
+    override fun title(context: ToolUIContext): String {
+        val query = context.arguments.getStringContent("query")
+        return if (query != null) {
+            stringResource(R.string.tool_ui_search_files, query)
+        } else {
+            stringResource(R.string.tool_ui_search_files_default)
+        }
+    }
+
+    private fun matchesOf(context: ToolUIContext): List<Triple<String, Int, String>> {
+        val content = context.content?.jsonObjectOrNull ?: return emptyList()
+        return content["matches"].orEmpty().jsonArrayOrNull.orEmpty().mapNotNull { item ->
+            val obj = item.jsonObjectOrNull ?: return@mapNotNull null
+            val path = obj["path"]?.jsonPrimitiveOrNull?.contentOrNull ?: return@mapNotNull null
+            val line = obj["line"]?.jsonPrimitiveOrNull?.intOrNull ?: 0
+            val text = obj["text"]?.jsonPrimitiveOrNull?.contentOrNull.orEmpty()
+            Triple(path, line, text)
+        }
+    }
+
+    private fun matchCountOf(context: ToolUIContext): Int? =
+        context.content?.jsonObjectOrNull?.get("matchCount")?.jsonPrimitiveOrNull?.intOrNull
+
+    private fun formatMatch(match: Triple<String, Int, String>): String {
+        val (path, line, text) = match
+        val preview = if (text.length > LINE_MAX_CHARS) text.take(LINE_MAX_CHARS) + "…" else text
+        return "$path:$line: $preview"
+    }
+
+    override fun hasSummary(context: ToolUIContext): Boolean = context.content != null
+
+    @Composable
+    override fun Summary(context: ToolUIContext) {
+        val matches = remember(context.content) { matchesOf(context) }
+        val count = remember(context.content) { matchCountOf(context) }
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(
+                text = if (count != null) {
+                    stringResource(R.string.tool_ui_search_files_matches, count)
+                } else {
+                    stringResource(R.string.tool_ui_search_files_no_matches)
+                },
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            if (matches.isNotEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(MaterialTheme.shapes.small)
+                        .background(MaterialTheme.colorScheme.surfaceContainer)
+                        .padding(horizontal = 8.dp, vertical = 6.dp)
+                        .shimmer(isLoading = context.loading),
+                ) {
+                    Text(
+                        text = matches.take(SUMMARY_MAX_LINES).joinToString("\n", transform = ::formatMatch),
+                        style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace),
+                        fontSize = 11.sp,
+                        lineHeight = 14.sp,
+                        maxLines = SUMMARY_MAX_LINES,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+        }
+    }
+
+    @Composable
+    override fun Preview(context: ToolUIContext, onDismissRequest: () -> Unit) {
+        val content = context.content
+        if (content == null) {
+            DefaultToolPreview(context = context)
+            return
+        }
+        val matches = remember(content) { matchesOf(context) }
+        val count = matchCountOf(context)
+        Column(
+            modifier = Modifier
+                .fillMaxHeight(0.8f)
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.tool_ui_search_files_default),
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Text(
+                text = buildString {
+                    append("query: ")
+                    append(context.arguments.getStringContent("query").orEmpty())
+                    val path = context.arguments.getStringContent("path")
+                    if (!path.isNullOrBlank()) append("\npath: $path")
+                    if (count != null) append("\n${stringResource(R.string.tool_ui_search_files_matches, count)}")
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            if (matches.isNotEmpty()) {
+                Text(
+                    text = matches.joinToString("\n", transform = ::formatMatch),
+                    style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                )
+            }
+        }
+    }
 }
