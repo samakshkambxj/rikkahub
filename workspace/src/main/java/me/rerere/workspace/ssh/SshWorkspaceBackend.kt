@@ -7,7 +7,9 @@ import me.rerere.workspace.WorkspaceBackend
 import me.rerere.workspace.WorkspaceCommandResult
 import me.rerere.workspace.WorkspaceConfig
 import me.rerere.workspace.WorkspaceFileEntry
+import me.rerere.workspace.WorkspaceIgnoreMatcher
 import me.rerere.workspace.WorkspaceLayout
+import me.rerere.workspace.WorkspaceSearchMatch
 import me.rerere.workspace.WorkspaceStorageArea
 import me.rerere.workspace.shellQuote
 import java.io.ByteArrayInputStream
@@ -153,6 +155,57 @@ class SshWorkspaceBackend(
 
     override fun localAbsoluteFile(path: String): File? = null
 
+    /**
+     * 远程搜索走 grep 命令: -I 跳过二进制, 内置忽略目录用 --exclude-dir 排除。
+     * 远程没有本地遍历, .gitignore 无法像本地那样逐级继承, 只能依赖内置目录名。
+     */
+    override fun searchFiles(
+        area: WorkspaceStorageArea,
+        path: String,
+        query: String,
+        regex: Boolean,
+        ignoreCase: Boolean,
+        includeGlob: String?,
+        maxResults: Int,
+    ): List<WorkspaceSearchMatch> {
+        require(query.isNotBlank()) { "Search query is required" }
+        val target = resolve(area, path)
+        val args = mutableListOf("grep", "-RInI", "-H")
+        if (ignoreCase) args += "-i"
+        args += if (regex) "-E" else "-F"
+        includeGlob?.takeIf { it.isNotBlank() }?.let { args += "--include=$it" }
+        WorkspaceIgnoreMatcher.DEFAULT_EXCLUDE_DIR_NAMES.forEach { args += "--exclude-dir=$it" }
+        args += listOf("-e", query, "--", target)
+        val result = executeCommand(
+            command = args.joinToString(" ") { it.shellQuote() },
+            cwd = "",
+            timeoutMillis = SEARCH_COMMAND_TIMEOUT_MS,
+            stdin = null,
+        )
+        if (result.timedOut) error("Search timed out after ${SEARCH_COMMAND_TIMEOUT_MS / 1000}s")
+        // grep 退出码: 0 有匹配, 1 无匹配, 2 出错
+        if (result.exitCode != 0 && result.exitCode != 1) {
+            error("Search failed: ${result.stderr.ifBlank { result.stdout }.trim()}")
+        }
+        val limit = maxResults.coerceIn(1, workspaceConfig.maxSearchResults)
+        return result.stdout
+            .lineSequence()
+            .mapNotNull { line -> parseGrepLine(area, line) }
+            .take(limit)
+            .toList()
+    }
+
+    private fun parseGrepLine(area: WorkspaceStorageArea, line: String): WorkspaceSearchMatch? {
+        val match = GREP_OUTPUT_REGEX.matchEntire(line) ?: return null
+        val (rawPath, rawLine, text) = match.destructured
+        val lineNumber = rawLine.toIntOrNull() ?: return null
+        return WorkspaceSearchMatch(
+            path = relativePath(area, rawPath),
+            line = lineNumber,
+            text = text,
+        )
+    }
+
     override fun executeCommand(
         command: String,
         cwd: String,
@@ -222,6 +275,12 @@ class SshWorkspaceBackend(
         path.removePrefix(areaRoot(area)).trimStart('/')
 
     companion object {
+        /** 远程 grep 可能扫整个目录树, 超时比普通命令放宽 */
+        private const val SEARCH_COMMAND_TIMEOUT_MS = 120_000L
+
+        /** grep -n 输出格式 路径:行号:内容; 路径取非贪婪匹配, 行号必须是纯数字 */
+        private val GREP_OUTPUT_REGEX = Regex("""^(.+?):(\d+):(.*)$""")
+
         /** 不需要连接即可得到的目录约定, 供界面展示路径使用 */
         fun layoutOf(remoteDir: String): WorkspaceLayout {
             val workspaceDir = normalizeAbsolute(remoteDir)

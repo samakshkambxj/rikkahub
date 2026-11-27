@@ -87,6 +87,19 @@ class LocalWorkspaceBackend(
         return result.stdout.parseEntry()
     }
 
+    override fun searchFiles(
+        area: WorkspaceStorageArea,
+        path: String,
+        query: String,
+        regex: Boolean,
+        ignoreCase: Boolean,
+        includeGlob: String?,
+        maxResults: Int,
+    ): List<WorkspaceSearchMatch> {
+        manager.ensureWorkspace(root)
+        return manager.searchFiles(root, query, path, area, regex, ignoreCase, includeGlob, maxResults = maxResults)
+    }
+
     override fun localFile(area: WorkspaceStorageArea, path: String): File {
         manager.ensureWorkspace(root)
         return manager.resolveFile(root, path, area)

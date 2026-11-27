@@ -54,6 +54,21 @@ interface WorkspaceBackend {
     /** 按环境内绝对路径解析宿主机上的文件, 不检查是否存在; 没有本地落点的环境返回 null */
     fun localAbsoluteFile(path: String): File?
 
+    /**
+     * 在存储区内递归搜索文本, 返回的匹配路径相对存储区根目录。
+     * 默认遵守 .gitignore 与内置忽略目录 (.git、node_modules 等), [maxResults] 为结果上限。
+     */
+    fun searchFiles(
+        area: WorkspaceStorageArea,
+        path: String,
+        query: String,
+        regex: Boolean,
+        ignoreCase: Boolean,
+        includeGlob: String?,
+        maxResults: Int,
+    ): List<WorkspaceSearchMatch> =
+        throw UnsupportedOperationException("Search is not supported in this workspace")
+
     /** 执行命令, [cwd] 为相对文件区的路径 */
     fun executeCommand(
         command: String,
@@ -88,6 +103,19 @@ data class WorkspaceLayout(
     /** 文件区内的绝对路径转成相对文件区的路径, 不在文件区内时原样返回 */
     fun relativeToWorkspace(path: String): String =
         path.removePrefix("$workspaceDir/").removePrefix(workspaceDir)
+
+    /**
+     * 环境内绝对路径定位到 (存储区, 区内相对路径)。bind mount 不参与划分:
+     * [workspaceDir] 之下算文件区, 其余算 Linux 根文件系统。
+     */
+    fun locateAbsolute(path: String): Pair<WorkspaceStorageArea, String> {
+        val normalized = requireNotNull(normalizeAbsolutePath(path)) { "Invalid absolute path: $path" }
+        return if (normalized == workspaceDir || normalized.startsWith("$workspaceDir/")) {
+            WorkspaceStorageArea.FILES to normalized.removePrefix(workspaceDir).trimStart('/')
+        } else {
+            WorkspaceStorageArea.LINUX to normalized.trimStart('/')
+        }
+    }
 
     /** 按最长匹配的目录判断: 例如 /a 免审批、/a/b 需审批时, /a/b 下的路径需要审批 */
     fun isWritable(path: String): Boolean {

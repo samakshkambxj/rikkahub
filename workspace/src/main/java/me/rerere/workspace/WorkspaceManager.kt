@@ -232,7 +232,30 @@ class WorkspaceManager(
         ignoreCase: Boolean = true,
         includeGlob: String? = null,
     ): List<WorkspaceSearchMatch> =
-        fileSystem.grep(filesDir(root), query, path, regex, ignoreCase, includeGlob)
+        searchFiles(root, query, path, WorkspaceStorageArea.FILES, regex, ignoreCase, includeGlob)
+
+    /** 在指定存储区内搜索文本, 默认遵守 .gitignore 与内置忽略目录 */
+    fun searchFiles(
+        root: String,
+        query: String,
+        path: String = "",
+        area: WorkspaceStorageArea = WorkspaceStorageArea.FILES,
+        regex: Boolean = false,
+        ignoreCase: Boolean = true,
+        includeGlob: String? = null,
+        respectGitignore: Boolean = true,
+        maxResults: Int = WorkspaceConfig().maxSearchResults,
+    ): List<WorkspaceSearchMatch> =
+        fileSystem.grep(
+            areaDir(root, area),
+            query,
+            path,
+            regex,
+            ignoreCase,
+            includeGlob,
+            respectGitignore,
+            maxResults,
+        )
 
     fun executeCommand(
         root: String,

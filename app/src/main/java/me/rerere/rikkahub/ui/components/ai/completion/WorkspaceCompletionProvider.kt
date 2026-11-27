@@ -7,6 +7,7 @@ import me.rerere.hugeicons.stroke.File02
 import me.rerere.hugeicons.stroke.Folder01
 import me.rerere.rikkahub.data.repository.WorkspaceRepository
 import me.rerere.workspace.WorkspaceFileEntry
+import me.rerere.workspace.WorkspaceIgnoreMatcher
 import me.rerere.workspace.WorkspaceStorageArea
 import kotlin.math.max
 

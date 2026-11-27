@@ -5,8 +5,11 @@ import java.io.InputStream
 import java.nio.charset.Charset
 import java.nio.charset.StandardCharsets
 import java.nio.file.FileSystems
+import java.nio.file.FileVisitResult
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.SimpleFileVisitor
+import java.nio.file.attribute.BasicFileAttributes
 import kotlin.io.path.name
 
 class WorkspaceFileSystem(
@@ -118,6 +121,13 @@ class WorkspaceFileSystem(
         }
     }
 
+    /**
+     * 在 [root] 下递归搜索文本。
+     *
+     * [respectGitignore] 为 true 时应用内置忽略目录 (.git、node_modules 等) 以及遍历过程中
+     * 遇到的各级 .gitignore, 被忽略的目录整棵跳过; [maxResults] 为结果上限, 会被钳制到
+     * [WorkspaceConfig.maxSearchResults] 以内。
+     */
     fun grep(
         root: File,
         query: String,
@@ -125,6 +135,8 @@ class WorkspaceFileSystem(
         regex: Boolean = false,
         ignoreCase: Boolean = true,
         includeGlob: String? = null,
+        respectGitignore: Boolean = true,
+        maxResults: Int = config.maxSearchResults,
     ): List<WorkspaceSearchMatch> {
         require(query.isNotBlank()) { "Search query is required" }
         val start = resolvePath(root, path)
@@ -134,35 +146,64 @@ class WorkspaceFileSystem(
         val includeMatcher = includeGlob
             ?.takeIf { it.isNotBlank() }
             ?.let { FileSystems.getDefault().getPathMatcher("glob:$it") }
+        val limit = maxResults.coerceIn(1, config.maxSearchResults)
 
         val results = mutableListOf<WorkspaceSearchMatch>()
-        walk(start) { paths ->
-            paths
-                .filter { Files.isRegularFile(it) }
-                .filter { !it.toFile().name.startsWith(".l2s.") }
-                .forEach { path ->
-                    if (results.size >= config.maxSearchResults) return@forEach
-                    if (includeMatcher != null &&
-                        !includeMatcher.matches(root.toPath().relativize(path).normalizeForMatch())
-                    ) {
-                        return@forEach
+        val baseMatcher = if (respectGitignore) WorkspaceIgnoreMatcher() else WorkspaceIgnoreMatcher.none()
+        // 每个目录一份生效的规则: 父目录的 .gitignore 继承到子目录
+        val matcherByDir = HashMap<File, WorkspaceIgnoreMatcher>()
+        Files.walkFileTree(start.toPath(), object : SimpleFileVisitor<Path>() {
+            override fun preVisitDirectory(dir: Path, attrs: BasicFileAttributes): FileVisitResult {
+                val dirFile = dir.toFile()
+                // 搜索起点就是 root 时相对路径记为空, 避免 root 自己的名字被规则误匹配
+                val relative = if (dirFile.canonicalFile == root.canonicalFile) {
+                    ""
+                } else {
+                    dirFile.relativePath(root)
+                }
+                var effective = matcherByDir[dirFile.parentFile] ?: baseMatcher
+                if (respectGitignore) {
+                    val gitignore = File(dirFile, GITIGNORE_FILE_NAME)
+                    if (gitignore.isFile && gitignore.length() <= GITIGNORE_MAX_BYTES) {
+                        effective = effective.withGitignore(relative, gitignore.readText())
                     }
-                    val file = path.toFile()
-                    if (file.length() > config.maxReadBytes) return@forEach
-                    file.useLines(StandardCharsets.UTF_8) { lines ->
-                        lines.forEachIndexed { index, line ->
-                            if (results.size >= config.maxSearchResults) return@useLines
-                            if (matcher.containsMatchIn(line)) {
-                                results += WorkspaceSearchMatch(
-                                    path = file.relativePath(root),
-                                    line = index + 1,
-                                    text = line,
-                                )
-                            }
+                }
+                matcherByDir[dirFile] = effective
+                return if (relative.isNotBlank() && effective.isIgnored(relative, isDirectory = true)) {
+                    FileVisitResult.SKIP_SUBTREE
+                } else {
+                    FileVisitResult.CONTINUE
+                }
+            }
+
+            override fun visitFile(file: Path, attrs: BasicFileAttributes): FileVisitResult {
+                if (results.size >= limit) return FileVisitResult.TERMINATE
+                val target = file.toFile()
+                if (target.name.startsWith(".l2s.")) return FileVisitResult.CONTINUE
+                val relative = target.relativePath(root)
+                val dirMatcher = matcherByDir[target.parentFile] ?: baseMatcher
+                if (dirMatcher.isIgnored(relative, isDirectory = false)) return FileVisitResult.CONTINUE
+                if (includeMatcher != null &&
+                    !includeMatcher.matches(root.toPath().relativize(file).normalizeForMatch())
+                ) {
+                    return FileVisitResult.CONTINUE
+                }
+                if (target.length() > config.maxReadBytes) return FileVisitResult.CONTINUE
+                target.useLines(StandardCharsets.UTF_8) { lines ->
+                    lines.forEachIndexed { index, line ->
+                        if (results.size >= limit) return@useLines
+                        if (matcher.containsMatchIn(line)) {
+                            results += WorkspaceSearchMatch(
+                                path = relative,
+                                line = index + 1,
+                                text = line,
+                            )
                         }
                     }
                 }
-        }
+                return FileVisitResult.CONTINUE
+            }
+        })
         return results
     }
 
@@ -211,4 +252,9 @@ class WorkspaceFileSystem(
 
     private fun Path.relativeToString(): String =
         joinToString("/") { it.name }
+
+    private companion object {
+        const val GITIGNORE_FILE_NAME = ".gitignore"
+        const val GITIGNORE_MAX_BYTES = 64L * 1024
+    }
 }

@@ -67,4 +67,41 @@ class WorkspaceLayoutTest {
             manager.terminalLaunch("ws", shellCompatibilityMode = false, extraMounts = missing)
         }
     }
+
+    @Test
+    fun locateAbsoluteMapsPathsToStorageAreas() {
+        val layout = WorkspaceLayout(workspaceDir = "/workspace", writableRoots = emptyList())
+
+        assertEquals(
+            WorkspaceStorageArea.FILES to "",
+            layout.locateAbsolute("/workspace"),
+        )
+        assertEquals(
+            WorkspaceStorageArea.FILES to "src/a.kt",
+            layout.locateAbsolute("/workspace/src/a.kt"),
+        )
+        assertEquals(
+            WorkspaceStorageArea.FILES to "src/a.kt",
+            layout.locateAbsolute("/workspace//src/./a.kt"),
+        )
+        assertEquals(
+            WorkspaceStorageArea.LINUX to "etc/hostname",
+            layout.locateAbsolute("/etc/hostname"),
+        )
+        assertEquals(
+            WorkspaceStorageArea.LINUX to "",
+            layout.locateAbsolute("/"),
+        )
+        // 前缀相同但不是子目录时不算文件区
+        assertEquals(
+            WorkspaceStorageArea.LINUX to "workspace-other/a.txt",
+            layout.locateAbsolute("/workspace-other/a.txt"),
+        )
+        assertThrows(IllegalArgumentException::class.java) {
+            layout.locateAbsolute("relative/path")
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            layout.locateAbsolute("/workspace/../../etc/passwd")
+        }
+    }
 }

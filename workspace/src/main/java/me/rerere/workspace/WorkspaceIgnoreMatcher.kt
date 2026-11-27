@@ -1,6 +1,12 @@
-package me.rerere.rikkahub.ui.components.ai.completion
+package me.rerere.workspace
 
-internal class WorkspaceIgnoreMatcher private constructor(
+/**
+ * gitignore 风格的路径忽略规则, 供文件搜索、补全索引等场景复用。
+ *
+ * 规则按目录继承: [withGitignore] 把某个目录的 .gitignore 内容叠加到已有规则上,
+ * 子目录在此基础上继续叠加, 匹配时后出现的规则覆盖先出现的规则 (包括 `!` 取消忽略)。
+ */
+class WorkspaceIgnoreMatcher private constructor(
     private val rules: List<Rule> = DEFAULT_RULES,
 ) {
     constructor() : this(DEFAULT_RULES)
@@ -75,14 +81,15 @@ internal class WorkspaceIgnoreMatcher private constructor(
     }
 
     companion object {
-        private val DEFAULT_RULES = listOf(
-            "build/",
-            ".gradle/",
-            ".git/",
-            "node_modules/",
-            "dist/",
-            "out/",
-        ).mapNotNull { Rule.parse(basePath = "", rawLine = it) }
+        /** 内置忽略的目录名, 本地搜索和远程 grep 的 --exclude-dir 都用它 */
+        val DEFAULT_EXCLUDE_DIR_NAMES = listOf(".git", ".gradle", "build", "node_modules", "dist", "out")
+
+        private val DEFAULT_RULES = DEFAULT_EXCLUDE_DIR_NAMES
+            .map { "$it/" }
+            .mapNotNull { Rule.parse(basePath = "", rawLine = it) }
+
+        /** 不带任何规则的匹配器, 用于关闭忽略行为的场景 */
+        fun none(): WorkspaceIgnoreMatcher = WorkspaceIgnoreMatcher(emptyList())
     }
 }
 
